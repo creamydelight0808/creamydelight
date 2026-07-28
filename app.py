@@ -600,7 +600,7 @@ with app.app_context():
 
     # Create default admin user if none exists
     if not User.query.first():
-        admin = User(username='mohan')
+        admin = User(username='mohandairyandpoultryfarm')
         admin.set_password('creamy2026')
         db.session.add(admin)
         db.session.commit()
