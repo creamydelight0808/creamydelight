@@ -151,6 +151,7 @@ async function sendWhatsApp(customerId, name, litres, amount, received, pending)
         `Received: ₹${received.toFixed(0)}\n` +
         `Pending: ₹${pending.toFixed(0)}\n\n` +
         `Please clear the pending amount at your convenience.\n\n` +
+        `Please ignore if already paid.\n\n` +
         `- Creamy Delight`;
     
     const encodedMsg = encodeURIComponent(message);
