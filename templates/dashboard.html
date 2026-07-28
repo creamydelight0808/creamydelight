@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block content %}
+<h2 class="mb-4">Dashboard</h2>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card text-center p-3">
+            <h6 class="text-muted">Today's Litres</h6>
+            <h3 id="todayLitres" class="text-primary">0</h3>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card text-center p-3">
+            <h6 class="text-muted">Customers Served Today</h6>
+            <h3 id="todayCustomers" class="text-success">0</h3>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card text-center p-3">
+            <h6 class="text-muted">Month Total (Litres)</h6>
+            <h3 id="monthLitres" class="text-info">0</h3>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card text-center p-3">
+            <h6 class="text-muted">Month Revenue</h6>
+            <h3 id="monthRevenue" class="text-warning">&#8377;0</h3>
+        </div>
+    </div>
+</div>
+
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card stat-card text-center p-3">
+            <h6 class="text-muted">Total Received</h6>
+            <h3 id="monthReceived" class="text-success">&#8377;0</h3>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card text-center p-3">
+            <h6 class="text-muted">Pending Amount</h6>
+            <h3 id="monthPending" class="text-danger">&#8377;0</h3>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card text-center p-3">
+            <h6 class="text-muted">Active Customers</h6>
+            <h3 id="totalCustomers" class="text-primary">0</h3>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card stat-card text-center p-3">
+            <button class="btn btn-primary btn-sm" onclick="seedData()">
+                <i class="bi bi-database-add"></i> Load Excel Data
+            </button>
+            <small class="text-muted mt-1 d-block">First time only</small>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-12">
+        <div class="card p-3">
+            <h5>Daily Litres (This Month)</h5>
+            <canvas id="dailyChart" height="80"></canvas>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% endblock %}
+{% block scripts %}
+<script>
+async function loadDashboard() {
+    const today = new Date().toISOString().split('T')[0];
+    const month = new Date().getMonth() + 1;
+    const year = new Date().getFullYear();
+
+    // Today's summary
+    const dailyRes = await fetch(`/api/reports/daily-summary?date=${today}`);
+    const daily = await dailyRes.json();
+    document.getElementById('todayLitres').textContent = daily.total_litres;
+    document.getElementById('todayCustomers').textContent = daily.total_customers_served;
+
+    // Monthly report
+    const monthRes = await fetch(`/api/reports/monthly?month=${month}&year=${year}`);
+    const monthly = await monthRes.json();
+    document.getElementById('monthLitres').textContent = monthly.summary.total_litres.toFixed(1);
+    document.getElementById('monthRevenue').textContent = '₹' + monthly.summary.total_amount.toFixed(0);
+    document.getElementById('monthReceived').textContent = '₹' + monthly.summary.total_received.toFixed(0);
+    document.getElementById('monthPending').textContent = '₹' + monthly.summary.total_pending.toFixed(0);
+
+    // Customers count
+    const custRes = await fetch('/api/customers');
+    const customers = await custRes.json();
+    document.getElementById('totalCustomers').textContent = customers.length;
+
+    // Daily chart
+    const delivRes = await fetch(`/api/deliveries?month=${month}&year=${year}`);
+    const deliveries = await delivRes.json();
+    const dailyTotals = {};
+    deliveries.forEach(d => {
+        dailyTotals[d.date] = (dailyTotals[d.date] || 0) + d.quantity_litres;
+    });
+    const labels = Object.keys(dailyTotals).sort();
+    const values = labels.map(l => dailyTotals[l]);
+
+    new Chart(document.getElementById('dailyChart'), {
+        type: 'bar',
+        data: {
+            labels: labels.map(l => l.split('-')[2]),
+            datasets: [{label: 'Litres', data: values, backgroundColor: '#2a5298'}]
+        },
+        options: {scales: {y: {beginAtZero: true}}}
+    });
+}
+
+async function seedData() {
+    if (!confirm('Load July 2026 data from Excel? This is one-time only.')) return;
+    const res = await fetch('/api/seed', {method: 'POST'});
+    const data = await res.json();
+    alert(data.message);
+    loadDashboard();
+}
+
+loadDashboard();
+</script>
+{% endblock %}
