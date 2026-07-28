@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6 text-center">
+        <div class="card p-4">
+            <h3 class="mb-3">Creamy Delight</h3>
+            <h5 class="text-muted mb-4">Milk Bill Payment</h5>
+            
+            <div class="mb-3">
+                <p><strong>Customer:</strong> {{ customer_name }}</p>
+                <p><strong>Amount Due:</strong> <span class="text-danger fs-4">₹{{ amount }}</span></p>
+                <p><strong>Period:</strong> {{ month_name }} {{ year }}</p>
+            </div>
+
+            <div class="mb-4">
+                <p class="text-muted">Scan QR code to pay via any UPI app</p>
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=upi://pay?pa=mohanece19@oksbi%26pn=Creamy%20Delight%26am={{ amount }}%26cu=INR%26tn=Milk%20Bill%20{{ month_name }}%20{{ year }}" 
+                     alt="UPI QR Code" class="img-fluid border rounded p-2" style="max-width: 250px;">
+            </div>
+
+            <div class="mb-3">
+                <p class="text-muted small">UPI ID: <strong>mohanece19@oksbi</strong></p>
+            </div>
+
+            <a href="upi://pay?pa=mohanece19@oksbi&pn=Creamy%20Delight&am={{ amount }}&cu=INR&tn=Milk%20Bill%20{{ month_name }}%20{{ year }}" 
+               class="btn btn-success btn-lg">
+                <i class="bi bi-phone"></i> Pay ₹{{ amount }} via UPI App
+            </a>
+            <p class="text-muted small mt-3">Please ignore if already paid.</p>
+        </div>
+    </div>
+</div>
+{% endblock %}

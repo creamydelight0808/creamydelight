@@ -150,6 +150,9 @@ async function sendWhatsApp(customerId, name, litres, amount, received, pending)
         `Total Amount: ₹${amount.toFixed(0)}\n` +
         `Received: ₹${received.toFixed(0)}\n` +
         `Pending: ₹${pending.toFixed(0)}\n\n` +
+        `Pay now via UPI:\n` +
+        `upi://pay?pa=mohanece19@oksbi&pn=Creamy%20Delight&am=${pending.toFixed(2)}&cu=INR&tn=Milk%20Bill%20${month}%20${year}\n\n` +
+        `Or scan QR: ${window.location.origin}/pay/${customerId}?amount=${pending.toFixed(0)}&month=${month}&year=${year}\n\n` +
         `Please clear the pending amount at your convenience.\n\n` +
         `Please ignore if already paid.\n\n` +
         `- Creamy Delight`;

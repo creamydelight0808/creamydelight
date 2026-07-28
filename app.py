@@ -74,6 +74,22 @@ def reports_page():
     return render_template('reports.html')
 
 
+@app.route('/pay/<int:customer_id>')
+def payment_page(customer_id):
+    customer = Customer.query.get_or_404(customer_id)
+    amount = request.args.get('amount', '0')
+    month = request.args.get('month', str(datetime.now().month))
+    year = request.args.get('year', str(datetime.now().year))
+    month_names = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+    month_name = month_names[int(month) - 1]
+    return render_template('pay.html',
+        customer_name=customer.name,
+        amount=amount,
+        month_name=month_name,
+        year=year
+    )
+
+
 # ============================================================
 # API - CUSTOMERS
 # ============================================================
