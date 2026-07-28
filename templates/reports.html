@@ -145,17 +145,24 @@ async function sendWhatsApp(customerId, name, litres, amount, received, pending)
     const year = document.getElementById('reportYear').value;
     
     const message = `Hi ${name},\n\n` +
-        `Here is your milk bill for ${month} ${year}:\n\n` +
-        `Total Litres: ${litres}\n` +
-        `Total Amount: ₹${amount.toFixed(0)}\n` +
-        `Received: ₹${received.toFixed(0)}\n` +
-        `Pending: ₹${pending.toFixed(0)}\n\n` +
-        `Pay now via UPI:\n` +
+        `Here is your milk bill for ${month} ${year}:\n` +
+        `${month} ${year} ತಿಂಗಳ ಹಾಲಿನ ಬಿಲ್:\n` +
+        `${month} ${year} महीने का दूध बिल:\n\n` +
+        `Total Litres / ಒಟ್ಟು ಲೀಟರ್ / कुल लीटर: ${litres}\n` +
+        `Total Amount / ಒಟ್ಟು ಮೊತ್ತ / कुल राशि: ₹${amount.toFixed(0)}\n` +
+        `Received / ಸ್ವೀಕರಿಸಿದ / प्राप्त: ₹${received.toFixed(0)}\n` +
+        `Pending / ಬಾಕಿ / बकाया: ₹${pending.toFixed(0)}\n\n` +
+        `Pay now via UPI / UPI ಮೂಲಕ ಪಾವತಿಸಿ / UPI से भुगतान करें:\n` +
         `upi://pay?pa=mohanece19@oksbi&pn=Creamy%20Delight&am=${pending.toFixed(2)}&cu=INR&tn=Milk%20Bill%20${month}%20${year}\n\n` +
-        `Or scan QR: ${window.location.origin}/pay/${customerId}?amount=${pending.toFixed(0)}&month=${month}&year=${year}\n\n` +
-        `Please clear the pending amount at your convenience.\n\n` +
-        `Please ignore if already paid.\n\n` +
-        `- Creamy Delight`;
+        `Or scan QR / QR ಸ್ಕ್ಯಾನ್ ಮಾಡಿ / QR स्कैन करें:\n` +
+        `${window.location.origin}/pay/${customerId}?amount=${pending.toFixed(0)}&month=${month}&year=${year}\n\n` +
+        `Please clear the pending amount at your convenience.\n` +
+        `ದಯವಿಟ್ಟು ಬಾಕಿ ಮೊತ್ತವನ್ನು ಪಾವತಿಸಿ.\n` +
+        `कृपया बकाया राशि का भुगतान करें.\n\n` +
+        `Please ignore if already paid.\n` +
+        `ಈಗಾಗಲೇ ಪಾವತಿಸಿದ್ದರೆ ದಯವಿಟ್ಟು ನಿರ್ಲಕ್ಷಿಸಿ.\n` +
+        `अगर पहले से भुगतान किया है तो कृपया अनदेखा करें.\n\n` +
+        `- Creamy Delight 🥛`;
     
     const encodedMsg = encodeURIComponent(message);
     
