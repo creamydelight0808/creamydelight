@@ -3,19 +3,52 @@ from datetime import datetime, date, timedelta
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_cors import CORS
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 CORS(app)
 
-basedir = os.path.abspath(os.path.dirname(__file__))
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(basedir, 'milk_tracker.db')}"
+# Secret key for session management
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+
+# Database configuration - use PostgreSQL from env var, fallback to SQLite for local dev
+database_url = os.environ.get('DATABASE_URL', '')
+if database_url.startswith('postgres://'):
+    # Render uses postgres:// but SQLAlchemy needs postgresql://
+    database_url = database_url.replace('postgres://', 'postgresql://', 1)
+
+if database_url:
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+else:
+    basedir = os.path.abspath(os.path.dirname(__file__))
+    app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{os.path.join(basedir, 'milk_tracker.db')}"
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
+# Flask-Login setup
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
+
+
 # ============================================================
 # MODELS
 # ============================================================
+
+class User(UserMixin, db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(80), unique=True, nullable=False)
+    password_hash = db.Column(db.String(256), nullable=False)
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
 
 class Customer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -50,31 +83,72 @@ class Payment(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+
+# ============================================================
+# AUTH ROUTES
+# ============================================================
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
+
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '')
+
+        user = User.query.filter_by(username=username).first()
+        if user and user.check_password(password):
+            login_user(user, remember=True)
+            next_page = request.args.get('next')
+            return redirect(next_page or url_for('dashboard'))
+        else:
+            return render_template('login.html', error='Invalid username or password')
+
+    return render_template('login.html')
+
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+
 # ============================================================
 # ROUTES - PAGES
 # ============================================================
 
 @app.route('/')
+@login_required
 def dashboard():
     return render_template('dashboard.html')
 
 
 @app.route('/customers')
+@login_required
 def customers_page():
     return render_template('customers.html')
 
 
 @app.route('/daily')
+@login_required
 def daily_page():
     return render_template('daily.html')
 
 
 @app.route('/reports')
+@login_required
 def reports_page():
     return render_template('reports.html')
 
 
 @app.route('/pay/<int:customer_id>')
+@login_required
 def payment_page(customer_id):
     customer = Customer.query.get_or_404(customer_id)
     amount = request.args.get('amount', '0')
@@ -95,6 +169,7 @@ def payment_page(customer_id):
 # ============================================================
 
 @app.route('/api/customers', methods=['GET'])
+@login_required
 def get_customers():
     active_only = request.args.get('active', 'true') == 'true'
     query = Customer.query
@@ -112,6 +187,7 @@ def get_customers():
 
 
 @app.route('/api/customers', methods=['POST'])
+@login_required
 def add_customer():
     data = request.json
     if not data.get('name'):
@@ -131,6 +207,7 @@ def add_customer():
 
 
 @app.route('/api/customers/<int:customer_id>', methods=['PUT'])
+@login_required
 def update_customer(customer_id):
     customer = Customer.query.get_or_404(customer_id)
     data = request.json
@@ -149,6 +226,7 @@ def update_customer(customer_id):
 
 
 @app.route('/api/customers/<int:customer_id>', methods=['DELETE'])
+@login_required
 def delete_customer(customer_id):
     customer = Customer.query.get_or_404(customer_id)
     customer.is_active = False
@@ -161,6 +239,7 @@ def delete_customer(customer_id):
 # ============================================================
 
 @app.route('/api/deliveries', methods=['GET'])
+@login_required
 def get_deliveries():
     date_str = request.args.get('date')
     month = request.args.get('month')
@@ -194,6 +273,7 @@ def get_deliveries():
 
 
 @app.route('/api/deliveries', methods=['POST'])
+@login_required
 def add_delivery():
     data = request.json
     customer_id = data.get('customer_id')
@@ -217,6 +297,7 @@ def add_delivery():
 
 
 @app.route('/api/deliveries/bulk', methods=['POST'])
+@login_required
 def bulk_delivery():
     """Save multiple deliveries at once (for daily entry form)"""
     data = request.json
@@ -248,6 +329,7 @@ def bulk_delivery():
 # ============================================================
 
 @app.route('/api/payments', methods=['GET'])
+@login_required
 def get_payments():
     customer_id = request.args.get('customer_id')
     month = request.args.get('month')
@@ -275,6 +357,7 @@ def get_payments():
 
 
 @app.route('/api/payments', methods=['POST'])
+@login_required
 def add_payment():
     data = request.json
     payment = Payment(
@@ -295,6 +378,7 @@ def add_payment():
 # ============================================================
 
 @app.route('/api/reports/monthly', methods=['GET'])
+@login_required
 def monthly_report():
     month = int(request.args.get('month', datetime.now().month))
     year = int(request.args.get('year', datetime.now().year))
@@ -356,6 +440,7 @@ def monthly_report():
 
 
 @app.route('/api/reports/daily-summary', methods=['GET'])
+@login_required
 def daily_summary():
     date_str = request.args.get('date', date.today().isoformat())
     d = datetime.strptime(date_str, '%Y-%m-%d').date()
@@ -376,6 +461,7 @@ def daily_summary():
 
 
 @app.route('/api/reports/customer-history', methods=['GET'])
+@login_required
 def customer_history():
     customer_id = request.args.get('customer_id')
     if not customer_id:
@@ -409,6 +495,7 @@ def customer_history():
 # ============================================================
 
 @app.route('/api/seed', methods=['POST'])
+@login_required
 def seed_data():
     """Seed the database with initial data from the Excel sheet"""
     # Default rate
@@ -510,6 +597,13 @@ def seed_data():
 
 with app.app_context():
     db.create_all()
+
+    # Create default admin user if none exists
+    if not User.query.first():
+        admin = User(username='mohan')
+        admin.set_password('creamy2026')
+        db.session.add(admin)
+        db.session.commit()
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

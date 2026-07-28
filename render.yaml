@@ -1,3 +1,9 @@
+databases:
+  - name: creamydelight-db
+    plan: free
+    databaseName: creamydelight
+    user: creamydelight_user
+
 services:
   - type: web
     name: creamydelight
@@ -7,3 +13,9 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: "3.12.0"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: creamydelight-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
