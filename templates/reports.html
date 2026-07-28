@@ -61,7 +61,7 @@
         <thead>
             <tr>
                 <th>#</th><th>Customer</th><th>Rate/L</th><th>Litres</th>
-                <th>Amount</th><th>Received</th><th>Pending</th><th>Record Payment</th>
+                <th>Amount</th><th>Received</th><th>Pending</th><th>Actions</th>
             </tr>
         </thead>
         <tbody id="reportTable"></tbody>
@@ -97,9 +97,13 @@ async function loadReport() {
             <td class="text-success">₹${c.received_payment.toFixed(0)}</td>
             <td class="text-danger">₹${c.pending_payment.toFixed(0)}</td>
             <td>
-                <button class="btn btn-sm btn-outline-success" 
+                <button class="btn btn-sm btn-outline-success me-1" 
                     onclick="recordPayment(${c.customer_id}, '${c.customer_name}', ${c.pending_payment}, ${month}, ${year})">
-                    <i class="bi bi-cash"></i> Pay
+                    <i class="bi bi-cash"></i>
+                </button>
+                <button class="btn btn-sm btn-success" 
+                    onclick="sendWhatsApp(${c.customer_id}, '${c.customer_name}', ${c.total_litres}, ${c.total_amount}, ${c.received_payment}, ${c.pending_payment})">
+                    <i class="bi bi-whatsapp"></i>
                 </button>
             </td>
         </tr>
@@ -125,6 +129,48 @@ async function recordPayment(customerId, name, pending, month, year) {
     if (res.ok) {
         alert('Payment recorded!');
         loadReport();
+    }
+}
+
+async function sendWhatsApp(customerId, name, litres, amount, received, pending) {
+    // Fetch customer phone number
+    const res = await fetch(`/api/customers`);
+    const customers = await res.json();
+    const customer = customers.find(c => c.id === customerId);
+    
+    const phone = customer ? customer.phone : '';
+    
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const month = monthNames[parseInt(document.getElementById('reportMonth').value) - 1];
+    const year = document.getElementById('reportYear').value;
+    
+    const message = `Hi ${name},\n\n` +
+        `Here is your milk bill for ${month} ${year}:\n\n` +
+        `Total Litres: ${litres}\n` +
+        `Total Amount: ₹${amount.toFixed(0)}\n` +
+        `Received: ₹${received.toFixed(0)}\n` +
+        `Pending: ₹${pending.toFixed(0)}\n\n` +
+        `Please clear the pending amount at your convenience.\n\n` +
+        `- Creamy Delight`;
+    
+    const encodedMsg = encodeURIComponent(message);
+    
+    if (phone) {
+        // Remove leading 0, add country code if not present
+        let formattedPhone = phone.replace(/\s+/g, '').replace(/^0/, '');
+        if (!formattedPhone.startsWith('+') && !formattedPhone.startsWith('91')) {
+            formattedPhone = '91' + formattedPhone;
+        }
+        window.open(`https://wa.me/${formattedPhone}?text=${encodedMsg}`, '_blank');
+    } else {
+        // No phone number - open WhatsApp with just the message (user picks contact)
+        const inputPhone = prompt(`No phone number saved for ${name}.\nEnter their WhatsApp number (e.g., 9876543210):`);
+        if (!inputPhone) return;
+        let formattedPhone = inputPhone.replace(/\s+/g, '').replace(/^0/, '');
+        if (!formattedPhone.startsWith('+') && !formattedPhone.startsWith('91')) {
+            formattedPhone = '91' + formattedPhone;
+        }
+        window.open(`https://wa.me/${formattedPhone}?text=${encodedMsg}`, '_blank');
     }
 }
 
