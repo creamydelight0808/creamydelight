@@ -403,13 +403,15 @@ def monthly_report():
             Delivery.date < end
         ).all()
 
-        total_litres = sum(d.quantity_litres for d in deliveries)
-        total_amount = total_litres * c.rate_per_litre
+        total_litres = round(sum(d.quantity_litres for d in deliveries), 2)
+        total_amount = round(total_litres * c.rate_per_litre, 2)
 
         payments = Payment.query.filter_by(
             customer_id=c.id, month=month, year=year
         ).all()
-        total_received = sum(p.amount for p in payments)
+        total_received = round(sum(p.amount for p in payments), 2)
+
+        pending = round(total_amount - total_received, 2)
 
         if total_litres > 0 or total_received > 0:
             report.append({
@@ -419,7 +421,7 @@ def monthly_report():
                 'total_litres': total_litres,
                 'total_amount': total_amount,
                 'received_payment': total_received,
-                'pending_payment': total_amount - total_received
+                'pending_payment': pending
             })
 
             total_litres_all += total_litres
@@ -431,10 +433,10 @@ def monthly_report():
         'year': year,
         'customers': report,
         'summary': {
-            'total_litres': total_litres_all,
-            'total_amount': total_amount_all,
-            'total_received': total_received_all,
-            'total_pending': total_amount_all - total_received_all
+            'total_litres': round(total_litres_all, 2),
+            'total_amount': round(total_amount_all, 2),
+            'total_received': round(total_received_all, 2),
+            'total_pending': round(total_amount_all - total_received_all, 2)
         }
     })
 
