@@ -1,4 +1,5 @@
 import os
+import math
 from datetime import datetime, date, timedelta
 from flask import Flask, render_template, request, jsonify, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
@@ -409,14 +410,14 @@ def monthly_report():
         ).all()
 
         total_litres = round(sum(d.quantity_litres for d in deliveries), 2)
-        total_amount = round(total_litres * c.rate_per_litre)  # Round to nearest integer (₹)
+        total_amount = math.ceil(total_litres * c.rate_per_litre)  # Always round UP (₹)
 
         payments = Payment.query.filter_by(
             customer_id=c.id, month=month, year=year
         ).all()
-        total_received = round(sum(p.amount for p in payments))
+        total_received = sum(p.amount for p in payments)
 
-        pending = total_amount - total_received
+        pending = total_amount - int(total_received)
 
         if total_litres > 0 or total_received > 0:
             report.append({
@@ -439,9 +440,9 @@ def monthly_report():
         'customers': report,
         'summary': {
             'total_litres': round(total_litres_all, 2),
-            'total_amount': round(total_amount_all),
-            'total_received': round(total_received_all),
-            'total_pending': round(total_amount_all - total_received_all)
+            'total_amount': math.ceil(total_amount_all),
+            'total_received': int(total_received_all),
+            'total_pending': math.ceil(total_amount_all) - int(total_received_all)
         }
     })
 
@@ -452,9 +453,12 @@ def daily_summary():
     date_str = request.args.get('date', date.today().isoformat())
     d = datetime.strptime(date_str, '%Y-%m-%d').date()
 
-    deliveries = Delivery.query.filter_by(date=d).all()
-    total_litres = sum(dv.quantity_litres for dv in deliveries)
-    total_customers = len([dv for dv in deliveries if dv.quantity_litres > 0])
+    deliveries = Delivery.query.filter(
+        Delivery.date == d,
+        Delivery.quantity_litres > 0
+    ).all()
+    total_litres = round(sum(dv.quantity_litres for dv in deliveries), 2)
+    total_customers = len(deliveries)
 
     return jsonify({
         'date': d.isoformat(),
@@ -463,7 +467,7 @@ def daily_summary():
         'deliveries': [{
             'customer_name': dv.customer.name,
             'quantity_litres': dv.quantity_litres
-        } for dv in deliveries if dv.quantity_litres > 0]
+        } for dv in deliveries]
     })
 
 
@@ -598,12 +602,31 @@ def seed_data():
     return jsonify({'message': 'Database seeded with July 2026 data'}), 201
 
 
+@app.route('/api/cleanup-zeros', methods=['POST'])
+@login_required
+def cleanup_zeros():
+    """Remove all delivery records with 0 quantity (leftover from old bulk save bug)"""
+    zero_deliveries = Delivery.query.filter(Delivery.quantity_litres <= 0).all()
+    count = len(zero_deliveries)
+    for d in zero_deliveries:
+        db.session.delete(d)
+    db.session.commit()
+    return jsonify({'message': f'Removed {count} zero-quantity delivery records'}), 200
+
+
 # ============================================================
 # MAIN
 # ============================================================
 
 with app.app_context():
     db.create_all()
+
+    # Cleanup: remove any zero-quantity delivery records (from old bulk save bug)
+    zero_records = Delivery.query.filter(Delivery.quantity_litres <= 0).all()
+    if zero_records:
+        for d in zero_records:
+            db.session.delete(d)
+        db.session.commit()
 
     # Create default admin user if none exists
     if not User.query.first():
