@@ -83,10 +83,10 @@ async function loadDashboard() {
     // Monthly report
     const monthRes = await fetch(`/api/reports/monthly?month=${month}&year=${year}`);
     const monthly = await monthRes.json();
-    document.getElementById('monthLitres').textContent = monthly.summary.total_litres.toFixed(1);
-    document.getElementById('monthRevenue').textContent = '₹' + monthly.summary.total_amount.toFixed(0);
-    document.getElementById('monthReceived').textContent = '₹' + monthly.summary.total_received.toFixed(0);
-    document.getElementById('monthPending').textContent = '₹' + monthly.summary.total_pending.toFixed(0);
+    document.getElementById('monthLitres').textContent = monthly.summary.total_litres % 1 === 0 ? monthly.summary.total_litres : monthly.summary.total_litres.toFixed(1);
+    document.getElementById('monthRevenue').textContent = '₹' + monthly.summary.total_amount;
+    document.getElementById('monthReceived').textContent = '₹' + monthly.summary.total_received;
+    document.getElementById('monthPending').textContent = '₹' + monthly.summary.total_pending;
 
     // Customers count
     const custRes = await fetch('/api/customers');

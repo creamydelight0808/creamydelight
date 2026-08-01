@@ -314,11 +314,16 @@ def bulk_delivery():
         quantity = float(entry.get('quantity_litres', 0))
 
         existing = Delivery.query.filter_by(customer_id=customer_id, date=d).first()
-        if existing:
-            existing.quantity_litres = quantity
+        if quantity > 0:
+            if existing:
+                existing.quantity_litres = quantity
+            else:
+                delivery = Delivery(customer_id=customer_id, date=d, quantity_litres=quantity)
+                db.session.add(delivery)
         else:
-            delivery = Delivery(customer_id=customer_id, date=d, quantity_litres=quantity)
-            db.session.add(delivery)
+            # Remove the record if quantity is 0 (don't store zero deliveries)
+            if existing:
+                db.session.delete(existing)
 
     db.session.commit()
     return jsonify({'message': f'Saved {len(entries)} entries'}), 201
@@ -404,14 +409,14 @@ def monthly_report():
         ).all()
 
         total_litres = round(sum(d.quantity_litres for d in deliveries), 2)
-        total_amount = round(total_litres * c.rate_per_litre, 2)
+        total_amount = round(total_litres * c.rate_per_litre)  # Round to nearest integer (₹)
 
         payments = Payment.query.filter_by(
             customer_id=c.id, month=month, year=year
         ).all()
-        total_received = round(sum(p.amount for p in payments), 2)
+        total_received = round(sum(p.amount for p in payments))
 
-        pending = round(total_amount - total_received, 2)
+        pending = total_amount - total_received
 
         if total_litres > 0 or total_received > 0:
             report.append({
@@ -434,9 +439,9 @@ def monthly_report():
         'customers': report,
         'summary': {
             'total_litres': round(total_litres_all, 2),
-            'total_amount': round(total_amount_all, 2),
-            'total_received': round(total_received_all, 2),
-            'total_pending': round(total_amount_all - total_received_all, 2)
+            'total_amount': round(total_amount_all),
+            'total_received': round(total_received_all),
+            'total_pending': round(total_amount_all - total_received_all)
         }
     })
 
