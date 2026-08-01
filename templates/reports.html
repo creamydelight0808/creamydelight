@@ -19,9 +19,17 @@
             <label class="form-label">Year</label>
             <input type="number" class="form-control" id="reportYear" value="2026">
         </div>
-        <div class="col-md-3">
+        <div class="col-md-2">
             <button class="btn btn-primary mt-4" onclick="loadReport()">
-                <i class="bi bi-file-earmark-bar-graph"></i> Generate Report
+                <i class="bi bi-file-earmark-bar-graph"></i> Generate
+            </button>
+        </div>
+        <div class="col-md-4 text-end">
+            <button class="btn btn-success mt-4 me-1" onclick="exportExcel()" id="btnExcel" style="display:none;">
+                <i class="bi bi-file-earmark-excel"></i> Excel
+            </button>
+            <button class="btn btn-danger mt-4" onclick="exportPDF()" id="btnPDF" style="display:none;">
+                <i class="bi bi-file-earmark-pdf"></i> PDF
             </button>
         </div>
     </div>
@@ -38,19 +46,19 @@
     <div class="col-md-3">
         <div class="card stat-card text-center p-3 bg-light">
             <h6>Total Amount</h6>
-            <h4 id="rptTotalAmount" class="text-warning">₹0</h4>
+            <h4 id="rptTotalAmount" class="text-warning">&#8377;0</h4>
         </div>
     </div>
     <div class="col-md-3">
         <div class="card stat-card text-center p-3 bg-light">
             <h6>Received</h6>
-            <h4 id="rptReceived" class="text-success">₹0</h4>
+            <h4 id="rptReceived" class="text-success">&#8377;0</h4>
         </div>
     </div>
     <div class="col-md-3">
         <div class="card stat-card text-center p-3 bg-light">
             <h6>Pending</h6>
-            <h4 id="rptPending" class="text-danger">₹0</h4>
+            <h4 id="rptPending" class="text-danger">&#8377;0</h4>
         </div>
     </div>
 </div>
@@ -67,10 +75,34 @@
         <tbody id="reportTable"></tbody>
     </table>
 </div>
+
+<!-- Customer Bill Modal -->
+<div class="modal fade" id="customerBillModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="billModalTitle">Customer Bill</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="billModalBody">
+                <div class="text-center"><div class="spinner-border text-primary"></div></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-danger btn-sm" onclick="exportCustomerPDF()">
+                    <i class="bi bi-file-earmark-pdf"></i> Download PDF
+                </button>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block scripts %}
 <script>
+let reportData = null;
+let currentCustomerBill = null;
+
 document.getElementById('reportMonth').value = new Date().getMonth() + 1;
 
 async function loadReport() {
@@ -78,30 +110,37 @@ async function loadReport() {
     const year = document.getElementById('reportYear').value;
 
     const res = await fetch(`/api/reports/monthly?month=${month}&year=${year}`);
-    const data = await res.json();
+    reportData = await res.json();
 
     document.getElementById('summaryCards').style.display = 'flex';
-    document.getElementById('rptTotalLitres').textContent = data.summary.total_litres % 1 === 0 ? data.summary.total_litres : data.summary.total_litres.toFixed(1);
-    document.getElementById('rptTotalAmount').textContent = '₹' + data.summary.total_amount;
-    document.getElementById('rptReceived').textContent = '₹' + data.summary.total_received;
-    document.getElementById('rptPending').textContent = '₹' + data.summary.total_pending;
+    document.getElementById('btnExcel').style.display = 'inline-block';
+    document.getElementById('btnPDF').style.display = 'inline-block';
+
+    document.getElementById('rptTotalLitres').textContent = reportData.summary.total_litres % 1 === 0 ? reportData.summary.total_litres : reportData.summary.total_litres.toFixed(1);
+    document.getElementById('rptTotalAmount').textContent = '\u20B9' + reportData.summary.total_amount;
+    document.getElementById('rptReceived').textContent = '\u20B9' + reportData.summary.total_received;
+    document.getElementById('rptPending').textContent = '\u20B9' + reportData.summary.total_pending;
 
     const tbody = document.getElementById('reportTable');
-    tbody.innerHTML = data.customers.map((c, i) => `
+    tbody.innerHTML = reportData.customers.map((c, i) => `
         <tr>
             <td>${i+1}</td>
-            <td>${c.customer_name}</td>
-            <td>₹${c.rate_per_litre}</td>
+            <td><a href="#" onclick="viewCustomerBill(${c.customer_id}); return false;">${c.customer_name}</a></td>
+            <td>\u20B9${c.rate_per_litre}</td>
             <td>${c.total_litres % 1 === 0 ? c.total_litres : c.total_litres.toFixed(1)}</td>
-            <td>₹${c.total_amount}</td>
-            <td class="text-success">₹${c.received_payment}</td>
-            <td class="text-danger">₹${c.pending_payment}</td>
+            <td>\u20B9${c.total_amount}</td>
+            <td class="text-success">\u20B9${c.received_payment}</td>
+            <td class="text-danger">\u20B9${c.pending_payment}</td>
             <td>
-                <button class="btn btn-sm btn-outline-success me-1" 
+                <button class="btn btn-sm btn-outline-primary me-1" title="View Bill"
+                    onclick="viewCustomerBill(${c.customer_id})">
+                    <i class="bi bi-receipt"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-success me-1" title="Record Payment"
                     onclick="recordPayment(${c.customer_id}, '${c.customer_name}', ${c.pending_payment}, ${month}, ${year})">
                     <i class="bi bi-cash"></i>
                 </button>
-                <button class="btn btn-sm btn-success" 
+                <button class="btn btn-sm btn-success" title="Send WhatsApp"
                     onclick="sendWhatsApp(${c.customer_id}, '${c.customer_name}', ${c.total_litres}, ${c.total_amount}, ${c.received_payment}, ${c.pending_payment})">
                     <i class="bi bi-whatsapp"></i>
                 </button>
@@ -110,8 +149,191 @@ async function loadReport() {
     `).join('');
 }
 
+// ============================================================
+// EXPORT - EXCEL
+// ============================================================
+function exportExcel() {
+    const month = document.getElementById('reportMonth').value;
+    const year = document.getElementById('reportYear').value;
+    window.location.href = `/api/reports/export-excel?month=${month}&year=${year}`;
+}
+
+// ============================================================
+// EXPORT - PDF
+// ============================================================
+function exportPDF() {
+    if (!reportData) return;
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+
+    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+    const month = document.getElementById('reportMonth').value;
+    const year = document.getElementById('reportYear').value;
+    const title = `Creamy Delight - ${monthNames[month-1]} ${year} Report`;
+
+    doc.setFontSize(16);
+    doc.text(title, 14, 20);
+
+    // Summary
+    doc.setFontSize(10);
+    doc.text(`Total Litres: ${reportData.summary.total_litres} | Amount: Rs.${reportData.summary.total_amount} | Received: Rs.${reportData.summary.total_received} | Pending: Rs.${reportData.summary.total_pending}`, 14, 30);
+
+    // Table
+    const rows = reportData.customers.map((c, i) => [
+        i + 1,
+        c.customer_name,
+        c.rate_per_litre,
+        c.total_litres,
+        c.total_amount,
+        c.received_payment,
+        c.pending_payment
+    ]);
+
+    doc.autoTable({
+        startY: 35,
+        head: [['#', 'Customer', 'Rate/L', 'Litres', 'Amount', 'Received', 'Pending']],
+        body: rows,
+        theme: 'grid',
+        headStyles: { fillColor: [42, 82, 152] },
+        styles: { fontSize: 9 }
+    });
+
+    doc.save(`Creamy_Delight_${monthNames[month-1]}_${year}.pdf`);
+}
+
+// ============================================================
+// CUSTOMER BILL VIEW
+// ============================================================
+async function viewCustomerBill(customerId) {
+    const month = document.getElementById('reportMonth').value;
+    const year = document.getElementById('reportYear').value;
+    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+    const modal = new bootstrap.Modal(document.getElementById('customerBillModal'));
+    document.getElementById('billModalBody').innerHTML = '<div class="text-center p-4"><div class="spinner-border text-primary"></div></div>';
+    modal.show();
+
+    const res = await fetch(`/api/reports/customer-bill?customer_id=${customerId}&month=${month}&year=${year}`);
+    currentCustomerBill = await res.json();
+
+    document.getElementById('billModalTitle').textContent = `${currentCustomerBill.customer.name} - ${monthNames[month-1]} ${year}`;
+
+    let html = `
+        <div class="row mb-3">
+            <div class="col-md-3 text-center">
+                <div class="p-2 bg-light rounded">
+                    <small class="text-muted">Days</small>
+                    <h5>${currentCustomerBill.summary.total_days}</h5>
+                </div>
+            </div>
+            <div class="col-md-3 text-center">
+                <div class="p-2 bg-light rounded">
+                    <small class="text-muted">Litres</small>
+                    <h5>${currentCustomerBill.summary.total_litres}</h5>
+                </div>
+            </div>
+            <div class="col-md-3 text-center">
+                <div class="p-2 bg-light rounded">
+                    <small class="text-muted">Amount</small>
+                    <h5 class="text-primary">\u20B9${currentCustomerBill.summary.total_amount}</h5>
+                </div>
+            </div>
+            <div class="col-md-3 text-center">
+                <div class="p-2 bg-light rounded">
+                    <small class="text-muted">Pending</small>
+                    <h5 class="text-danger">\u20B9${currentCustomerBill.summary.pending}</h5>
+                </div>
+            </div>
+        </div>
+        <p class="text-muted mb-2">Rate: \u20B9${currentCustomerBill.customer.rate_per_litre}/litre</p>
+        <table class="table table-sm table-bordered">
+            <thead class="table-light">
+                <tr><th>Date</th><th>Day</th><th>Litres</th><th>Amount</th></tr>
+            </thead>
+            <tbody>
+    `;
+
+    for (const entry of currentCustomerBill.daily_entries) {
+        const dateStr = new Date(entry.date).toLocaleDateString('en-IN', {day:'numeric', month:'short'});
+        html += `<tr>
+            <td>${dateStr}</td>
+            <td>${entry.day}</td>
+            <td>${entry.quantity_litres}</td>
+            <td>\u20B9${entry.amount}</td>
+        </tr>`;
+    }
+
+    html += `</tbody>
+        <tfoot class="table-secondary fw-bold">
+            <tr>
+                <td colspan="2">Total</td>
+                <td>${currentCustomerBill.summary.total_litres}</td>
+                <td>\u20B9${currentCustomerBill.summary.total_amount}</td>
+            </tr>
+        </tfoot>
+        </table>`;
+
+    if (currentCustomerBill.payments.length > 0) {
+        html += `<h6 class="mt-3">Payments Received</h6><ul class="list-group list-group-flush">`;
+        for (const p of currentCustomerBill.payments) {
+            const pDate = new Date(p.date).toLocaleDateString('en-IN', {day:'numeric', month:'short'});
+            html += `<li class="list-group-item d-flex justify-content-between">
+                <span>${pDate}</span><span class="text-success fw-bold">\u20B9${p.amount}</span>
+            </li>`;
+        }
+        html += `</ul>`;
+    }
+
+    document.getElementById('billModalBody').innerHTML = html;
+}
+
+// ============================================================
+// EXPORT CUSTOMER BILL AS PDF
+// ============================================================
+function exportCustomerPDF() {
+    if (!currentCustomerBill) return;
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF();
+    const bill = currentCustomerBill;
+    const monthNames = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+    doc.setFontSize(14);
+    doc.text('Creamy Delight', 14, 15);
+    doc.setFontSize(11);
+    doc.text(`Bill for: ${bill.customer.name}`, 14, 23);
+    doc.text(`Month: ${monthNames[bill.month - 1]} ${bill.year}`, 14, 30);
+    doc.text(`Rate: Rs.${bill.customer.rate_per_litre}/litre`, 14, 37);
+
+    const rows = bill.daily_entries.map(e => {
+        const d = new Date(e.date);
+        return [d.toLocaleDateString('en-IN', {day:'numeric', month:'short'}), e.day, e.quantity_litres, `Rs.${e.amount}`];
+    });
+
+    doc.autoTable({
+        startY: 42,
+        head: [['Date', 'Day', 'Litres', 'Amount']],
+        body: rows,
+        foot: [['', 'Total', bill.summary.total_litres, `Rs.${bill.summary.total_amount}`]],
+        theme: 'grid',
+        headStyles: { fillColor: [42, 82, 152] },
+        footStyles: { fillColor: [230, 230, 230], textColor: [0, 0, 0], fontStyle: 'bold' },
+        styles: { fontSize: 9 }
+    });
+
+    let y = doc.lastAutoTable.finalY + 10;
+    doc.setFontSize(10);
+    doc.text(`Total Amount: Rs.${bill.summary.total_amount}`, 14, y);
+    doc.text(`Received: Rs.${bill.summary.total_received}`, 14, y + 6);
+    doc.text(`Pending: Rs.${bill.summary.pending}`, 14, y + 12);
+
+    doc.save(`${bill.customer.name}_${monthNames[bill.month-1]}_${bill.year}.pdf`);
+}
+
+// ============================================================
+// PAYMENT & WHATSAPP (existing)
+// ============================================================
 async function recordPayment(customerId, name, pending, month, year) {
-    const amount = prompt(`Record payment for ${name}\nPending: ₹${pending}\nEnter amount received:`);
+    const amount = prompt(`Record payment for ${name}\nPending: \u20B9${pending}\nEnter amount received:`);
     if (!amount || isNaN(amount)) return;
 
     const res = await fetch('/api/payments', {
@@ -133,58 +355,55 @@ async function recordPayment(customerId, name, pending, month, year) {
 }
 
 async function sendWhatsApp(customerId, name, litres, amount, received, pending) {
-    // Fetch customer phone number
     const res = await fetch(`/api/customers`);
     const customers = await res.json();
     const customer = customers.find(c => c.id === customerId);
-    
+
     const phone = customer ? customer.phone : '';
-    
+
     const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const month = monthNames[parseInt(document.getElementById('reportMonth').value) - 1];
     const year = document.getElementById('reportYear').value;
-    
+
     const message = `Hi ${name},\n\n` +
         `--- English ---\n` +
         `Here is your milk bill for ${month} ${year}:\n` +
         `Total Litres: ${litres}\n` +
-        `Total Amount: ₹${amount}\n` +
-        `Received: ₹${received}\n` +
-        `Pending: ₹${pending}\n` +
+        `Total Amount: \u20B9${amount}\n` +
+        `Received: \u20B9${received}\n` +
+        `Pending: \u20B9${pending}\n` +
         `Please clear the pending amount at your convenience.\n` +
         `Please ignore if already paid.\n\n` +
-        `--- ಕನ್ನಡ ---\n` +
-        `${month} ${year} ತಿಂಗಳ ಹಾಲಿನ ಬಿಲ್:\n` +
-        `ಒಟ್ಟು ಲೀಟರ್: ${litres}\n` +
-        `ಒಟ್ಟು ಮೊತ್ತ: ₹${amount}\n` +
-        `ಸ್ವೀಕರಿಸಿದ: ₹${received}\n` +
-        `ಬಾಕಿ: ₹${pending}\n` +
-        `ದಯವಿಟ್ಟು ಬಾಕಿ ಮೊತ್ತವನ್ನು ಪಾವತಿಸಿ.\n` +
-        `ಈಗಾಗಲೇ ಪಾವತಿಸಿದ್ದರೆ ದಯವಿಟ್ಟು ನಿರ್ಲಕ್ಷಿಸಿ.\n\n` +
-        `--- हिंदी ---\n` +
-        `${month} ${year} महीने का दूध बिल:\n` +
-        `कुल लीटर: ${litres}\n` +
-        `कुल राशि: ₹${amount}\n` +
-        `प्राप्त: ₹${received}\n` +
-        `बकाया: ₹${pending}\n` +
-        `कृपया बकाया राशि का भुगतान करें.\n` +
-        `अगर पहले से भुगतान किया है तो कृपया अनदेखा करें.\n\n` +
-        `--- Payment / ಪಾವತಿ / भुगतान ---\n` +
-        `Pay here / ಇಲ್ಲಿ ಪಾವತಿಸಿ / यहाँ भुगतान करें:\n` +
-        `https://payviaupi.link/pay?pa=mohanece19@oksbi&pn=Creamy+Delight&am=${pending}&tn=Milk+Bill+${month}+${year}\n\n` +
-        `- Creamy Delight 🥛`;
-    
+        `--- \u0C95\u0CA8\u0CCD\u0CA8\u0CA1 ---\n` +
+        `${month} ${year} \u0CA4\u0CBF\u0C82\u0C97\u0CB3 \u0CB9\u0CBE\u0CB2\u0CBF\u0CA8 \u0CAC\u0CBF\u0CB2\u0CCD:\n` +
+        `\u0C92\u0C9F\u0CCD\u0C9F\u0CC1 \u0CB2\u0CC0\u0C9F\u0CB0\u0CCD: ${litres}\n` +
+        `\u0C92\u0C9F\u0CCD\u0C9F\u0CC1 \u0CAE\u0CCA\u0CA4\u0CCD\u0CA4: \u20B9${amount}\n` +
+        `\u0CB8\u0CCD\u0CB5\u0CC0\u0C95\u0CB0\u0CBF\u0CB8\u0CBF\u0CA6: \u20B9${received}\n` +
+        `\u0CAC\u0CBE\u0C95\u0CBF: \u20B9${pending}\n` +
+        `\u0CA6\u0CAF\u0CB5\u0CBF\u0C9F\u0CCD\u0C9F\u0CC1 \u0CAC\u0CBE\u0C95\u0CBF \u0CAE\u0CCA\u0CA4\u0CCD\u0CA4\u0CB5\u0CA8\u0CCD\u0CA8\u0CC1 \u0CAA\u0CBE\u0CB5\u0CA4\u0CBF\u0CB8\u0CBF.\n` +
+        `\u0C88\u0C97\u0CBE\u0C97\u0CB2\u0CC7 \u0CAA\u0CBE\u0CB5\u0CA4\u0CBF\u0CB8\u0CBF\u0CA6\u0CCD\u0CA6\u0CB0\u0CC6 \u0CA6\u0CAF\u0CB5\u0CBF\u0C9F\u0CCD\u0C9F\u0CC1 \u0CA8\u0CBF\u0CB0\u0CCD\u0CB2\u0C95\u0CCD\u0CB7\u0CBF\u0CB8\u0CBF.\n\n` +
+        `--- \u0939\u093F\u0902\u0926\u0940 ---\n` +
+        `${month} ${year} \u092E\u0939\u0940\u0928\u0947 \u0915\u093E \u0926\u0942\u0927 \u092C\u093F\u0932:\n` +
+        `\u0915\u0941\u0932 \u0932\u0940\u091F\u0930: ${litres}\n` +
+        `\u0915\u0941\u0932 \u0930\u093E\u0936\u093F: \u20B9${amount}\n` +
+        `\u092A\u094D\u0930\u093E\u092A\u094D\u0924: \u20B9${received}\n` +
+        `\u092C\u0915\u093E\u092F\u093E: \u20B9${pending}\n` +
+        `\u0915\u0943\u092A\u092F\u093E \u092C\u0915\u093E\u092F\u093E \u0930\u093E\u0936\u093F \u0915\u093E \u092D\u0941\u0917\u0924\u093E\u0928 \u0915\u0930\u0947\u0902.\n` +
+        `\u0905\u0917\u0930 \u092A\u0939\u0932\u0947 \u0938\u0947 \u092D\u0941\u0917\u0924\u093E\u0928 \u0915\u093F\u092F\u093E \u0939\u0948 \u0924\u094B \u0915\u0943\u092A\u092F\u093E \u0905\u0928\u0926\u0947\u0916\u093E \u0915\u0930\u0947\u0902.\n\n` +
+        `--- Payment / \u0CAA\u0CBE\u0CB5\u0CA4\u0CBF / \u092D\u0941\u0917\u0924\u093E\u0928 ---\n` +
+        `UPI: upi://pay?pa=mohanece19@oksbi&pn=Creamy%20Delight&am=${pending}&cu=INR&tn=Milk%20Bill%20${month}%20${year}\n\n` +
+        `QR Code: ${window.location.origin}/pay/${customerId}?amount=${pending}&month=${month}&year=${year}\n\n` +
+        `- Creamy Delight \uD83E\uDD5B`;
+
     const encodedMsg = encodeURIComponent(message);
-    
+
     if (phone) {
-        // Remove leading 0, add country code if not present
         let formattedPhone = phone.replace(/\s+/g, '').replace(/^0/, '');
         if (!formattedPhone.startsWith('+') && !formattedPhone.startsWith('91')) {
             formattedPhone = '91' + formattedPhone;
         }
         window.open(`https://wa.me/${formattedPhone}?text=${encodedMsg}`, '_blank');
     } else {
-        // No phone number - open WhatsApp with just the message (user picks contact)
         const inputPhone = prompt(`No phone number saved for ${name}.\nEnter their WhatsApp number (e.g., 9876543210):`);
         if (!inputPhone) return;
         let formattedPhone = inputPhone.replace(/\s+/g, '').replace(/^0/, '');

@@ -502,6 +502,189 @@ def customer_history():
 
 
 # ============================================================
+# API - EXPORT
+# ============================================================
+
+@app.route('/api/reports/export-excel', methods=['GET'])
+@login_required
+def export_excel():
+    """Export monthly report as Excel file"""
+    from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
+    from flask import send_file
+
+    month = int(request.args.get('month', datetime.now().month))
+    year = int(request.args.get('year', datetime.now().year))
+
+    start = date(year, month, 1)
+    if month == 12:
+        end = date(year + 1, 1, 1)
+    else:
+        end = date(year, month + 1, 1)
+
+    month_names = ['January','February','March','April','May','June',
+                   'July','August','September','October','November','December']
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f"{month_names[month-1]} {year}"
+
+    # Styles
+    header_font = Font(bold=True, size=12)
+    title_font = Font(bold=True, size=14)
+    header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+    header_font_white = Font(bold=True, color="FFFFFF")
+    thin_border = Border(
+        left=Side(style='thin'), right=Side(style='thin'),
+        top=Side(style='thin'), bottom=Side(style='thin')
+    )
+
+    # Title
+    ws.merge_cells('A1:G1')
+    ws['A1'] = f"Creamy Delight - Monthly Bill Report ({month_names[month-1]} {year})"
+    ws['A1'].font = title_font
+    ws['A1'].alignment = Alignment(horizontal='center')
+
+    # Headers
+    headers = ['#', 'Customer', 'Rate/L', 'Litres', 'Amount (₹)', 'Received (₹)', 'Pending (₹)']
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=3, column=col, value=header)
+        cell.font = header_font_white
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal='center')
+        cell.border = thin_border
+
+    # Data
+    customers = Customer.query.order_by(Customer.name).all()
+    row_num = 4
+    total_litres_all = 0
+    total_amount_all = 0
+    total_received_all = 0
+
+    for c in customers:
+        deliveries = Delivery.query.filter(
+            Delivery.customer_id == c.id,
+            Delivery.date >= start,
+            Delivery.date < end
+        ).all()
+
+        total_litres = round(sum(d.quantity_litres for d in deliveries), 2)
+        total_amount = math.ceil(total_litres * c.rate_per_litre)
+
+        payments = Payment.query.filter_by(
+            customer_id=c.id, month=month, year=year
+        ).all()
+        total_received = sum(p.amount for p in payments)
+        pending = total_amount - int(total_received)
+
+        if total_litres > 0 or total_received > 0:
+            ws.cell(row=row_num, column=1, value=row_num - 3).border = thin_border
+            ws.cell(row=row_num, column=2, value=c.name).border = thin_border
+            ws.cell(row=row_num, column=3, value=c.rate_per_litre).border = thin_border
+            ws.cell(row=row_num, column=4, value=total_litres).border = thin_border
+            ws.cell(row=row_num, column=5, value=total_amount).border = thin_border
+            ws.cell(row=row_num, column=6, value=int(total_received)).border = thin_border
+            ws.cell(row=row_num, column=7, value=pending).border = thin_border
+            row_num += 1
+
+            total_litres_all += total_litres
+            total_amount_all += total_amount
+            total_received_all += total_received
+
+    # Summary row
+    row_num += 1
+    ws.cell(row=row_num, column=2, value="TOTAL").font = header_font
+    ws.cell(row=row_num, column=4, value=round(total_litres_all, 2)).font = header_font
+    ws.cell(row=row_num, column=5, value=math.ceil(total_amount_all)).font = header_font
+    ws.cell(row=row_num, column=6, value=int(total_received_all)).font = header_font
+    ws.cell(row=row_num, column=7, value=math.ceil(total_amount_all) - int(total_received_all)).font = header_font
+
+    # Auto-adjust column widths
+    for col in ws.columns:
+        max_length = 0
+        for cell in col:
+            if cell.value:
+                max_length = max(max_length, len(str(cell.value)))
+        ws.column_dimensions[col[0].column_letter].width = max_length + 3
+
+    # Save to BytesIO
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    filename = f"Creamy_Delight_{month_names[month-1]}_{year}.xlsx"
+    return send_file(output, as_attachment=True, download_name=filename,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+@app.route('/api/reports/customer-bill', methods=['GET'])
+@login_required
+def customer_monthly_bill():
+    """Get per-customer daily delivery breakdown for a month"""
+    customer_id = request.args.get('customer_id')
+    month = int(request.args.get('month', datetime.now().month))
+    year = int(request.args.get('year', datetime.now().year))
+
+    if not customer_id:
+        return jsonify({'error': 'customer_id required'}), 400
+
+    customer = Customer.query.get_or_404(int(customer_id))
+
+    start = date(year, month, 1)
+    if month == 12:
+        end = date(year + 1, 1, 1)
+    else:
+        end = date(year, month + 1, 1)
+
+    deliveries = Delivery.query.filter(
+        Delivery.customer_id == customer.id,
+        Delivery.date >= start,
+        Delivery.date < end,
+        Delivery.quantity_litres > 0
+    ).order_by(Delivery.date).all()
+
+    payments = Payment.query.filter_by(
+        customer_id=customer.id, month=month, year=year
+    ).all()
+
+    daily_entries = [{
+        'date': d.date.isoformat(),
+        'day': d.date.strftime('%a'),
+        'quantity_litres': d.quantity_litres,
+        'amount': math.ceil(d.quantity_litres * customer.rate_per_litre)
+    } for d in deliveries]
+
+    total_litres = round(sum(d.quantity_litres for d in deliveries), 2)
+    total_amount = math.ceil(total_litres * customer.rate_per_litre)
+    total_received = sum(p.amount for p in payments)
+    pending = total_amount - int(total_received)
+
+    return jsonify({
+        'customer': {
+            'id': customer.id,
+            'name': customer.name,
+            'rate_per_litre': customer.rate_per_litre
+        },
+        'month': month,
+        'year': year,
+        'daily_entries': daily_entries,
+        'summary': {
+            'total_litres': total_litres,
+            'total_amount': total_amount,
+            'total_received': int(total_received),
+            'pending': pending,
+            'total_days': len(daily_entries)
+        },
+        'payments': [{
+            'date': p.payment_date.isoformat(),
+            'amount': p.amount,
+            'notes': p.notes
+        } for p in payments]
+    })
+
+
+# ============================================================
 # SEED DATA FROM EXCEL
 # ============================================================
 
