@@ -441,13 +441,8 @@ async function sendWhatsApp(customerId, name, litres, amount, received, thisMont
         }
         window.open(`https://wa.me/${formattedPhone}?text=${encodedMsg}`, '_blank');
     } else {
-        const inputPhone = prompt(`No phone number saved for ${name}.\nEnter their WhatsApp number (e.g., 9876543210):`);
-        if (!inputPhone) return;
-        let formattedPhone = inputPhone.replace(/\s+/g, '').replace(/^0/, '');
-        if (!formattedPhone.startsWith('+') && !formattedPhone.startsWith('91')) {
-            formattedPhone = '91' + formattedPhone;
-        }
-        window.open(`https://wa.me/${formattedPhone}?text=${encodedMsg}`, '_blank');
+        // No phone saved - open WhatsApp with just the message (user picks contact)
+        window.open(`https://wa.me/?text=${encodedMsg}`, '_blank');
     }
 }
 
