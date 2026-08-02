@@ -28,8 +28,11 @@
             <button class="btn btn-success mt-4 me-1" onclick="exportExcel()" id="btnExcel" style="display:none;">
                 <i class="bi bi-file-earmark-excel"></i> Excel
             </button>
-            <button class="btn btn-danger mt-4" onclick="exportPDF()" id="btnPDF" style="display:none;">
+            <button class="btn btn-danger mt-4 me-1" onclick="exportPDF()" id="btnPDF" style="display:none;">
                 <i class="bi bi-file-earmark-pdf"></i> PDF
+            </button>
+            <button class="btn btn-success mt-4" onclick="sendAllWhatsApp()" id="btnSendAll" style="display:none;">
+                <i class="bi bi-whatsapp"></i> Send All
             </button>
         </div>
     </div>
@@ -127,6 +130,7 @@ async function loadReport() {
     document.getElementById('summaryCards').style.display = 'flex';
     document.getElementById('btnExcel').style.display = 'inline-block';
     document.getElementById('btnPDF').style.display = 'inline-block';
+    document.getElementById('btnSendAll').style.display = 'inline-block';
 
     document.getElementById('rptTotalLitres').textContent = reportData.summary.total_litres % 1 === 0 ? reportData.summary.total_litres : reportData.summary.total_litres.toFixed(1);
     document.getElementById('rptTotalAmount').textContent = '\u20B9' + reportData.summary.total_amount;
@@ -445,6 +449,70 @@ async function sendWhatsApp(customerId, name, litres, amount, received, thisMont
         }
         window.open(`https://wa.me/${formattedPhone}?text=${encodedMsg}`, '_blank');
     }
+}
+
+// ============================================================
+// SEND ALL - Bulk WhatsApp to all customers with pending
+// ============================================================
+let sendAllQueue = [];
+let sendAllIndex = 0;
+let sendAllRunning = false;
+
+function sendAllWhatsApp() {
+    if (!reportData || !reportData.customers.length) {
+        alert('No report data. Generate the report first.');
+        return;
+    }
+
+    // Filter customers who have overall pending > 0
+    const pendingCustomers = reportData.customers.filter(c => c.overall_pending > 0);
+
+    if (pendingCustomers.length === 0) {
+        alert('No customers with pending balance!');
+        return;
+    }
+
+    const count = pendingCustomers.length;
+    if (!confirm(`Send WhatsApp bills to ${count} customers with pending balance?\n\nThis will open WhatsApp for each customer one by one (4 second gap).\n\nMake sure pop-ups are allowed in your browser!`)) return;
+
+    sendAllQueue = pendingCustomers;
+    sendAllIndex = 0;
+    sendAllRunning = true;
+
+    // Show progress
+    const btn = document.getElementById('btnSendAll');
+    btn.disabled = true;
+    btn.innerHTML = `<i class="bi bi-hourglass-split"></i> Sending 0/${count}...`;
+
+    sendNextMessage();
+}
+
+function sendNextMessage() {
+    if (!sendAllRunning || sendAllIndex >= sendAllQueue.length) {
+        // Done
+        const btn = document.getElementById('btnSendAll');
+        btn.disabled = false;
+        btn.innerHTML = `<i class="bi bi-whatsapp"></i> Send All`;
+        if (sendAllIndex >= sendAllQueue.length) {
+            alert(`Done! Opened WhatsApp for ${sendAllQueue.length} customers.`);
+        }
+        sendAllRunning = false;
+        return;
+    }
+
+    const c = sendAllQueue[sendAllIndex];
+
+    // Update progress
+    const btn = document.getElementById('btnSendAll');
+    btn.innerHTML = `<i class="bi bi-hourglass-split"></i> ${sendAllIndex + 1}/${sendAllQueue.length} - ${c.customer_name}`;
+
+    // Trigger the WhatsApp send for this customer
+    sendWhatsApp(c.customer_id, c.customer_name, c.total_litres, c.total_amount, c.received_payment, c.pending_payment, c.prev_pending, c.overall_pending);
+
+    sendAllIndex++;
+
+    // Wait 4 seconds before next one
+    setTimeout(sendNextMessage, 4000);
 }
 
 loadReport();
