@@ -157,7 +157,7 @@ async function loadReport() {
                     <i class="bi bi-cash"></i>
                 </button>
                 <button class="btn btn-sm btn-success" title="Send WhatsApp"
-                    onclick="sendWhatsApp(${c.customer_id}, '${c.customer_name}', ${c.total_litres}, ${c.total_amount}, ${c.received_payment}, ${c.overall_pending})">
+                    onclick="sendWhatsApp(${c.customer_id}, '${c.customer_name}', ${c.total_litres}, ${c.total_amount}, ${c.received_payment}, ${c.pending_payment}, ${c.prev_pending}, ${c.overall_pending})">
                     <i class="bi bi-whatsapp"></i>
                 </button>
             </td>
@@ -372,7 +372,7 @@ async function recordPayment(customerId, name, pending, month, year) {
     }
 }
 
-async function sendWhatsApp(customerId, name, litres, amount, received, pending) {
+async function sendWhatsApp(customerId, name, litres, amount, received, thisMonthPending, prevPending, overallPending) {
     const res = await fetch(`/api/customers`);
     const customers = await res.json();
     const customer = customers.find(c => c.id === customerId);
@@ -383,35 +383,59 @@ async function sendWhatsApp(customerId, name, litres, amount, received, pending)
     const month = monthNames[parseInt(document.getElementById('reportMonth').value) - 1];
     const year = document.getElementById('reportYear').value;
 
-    const message = `Hi ${name},\n\n` +
-        `--- English ---\n` +
-        `Here is your milk bill for ${month} ${year}:\n` +
-        `Total Litres: ${litres}\n` +
-        `Total Amount: \u20B9${amount}\n` +
-        `Received: \u20B9${received}\n` +
-        `Pending: \u20B9${pending}\n` +
-        `Please clear the pending amount at your convenience.\n` +
-        `Please ignore if already paid.\n\n` +
-        `--- \u0C95\u0CA8\u0CCD\u0CA8\u0CA1 ---\n` +
-        `${month} ${year} \u0CA4\u0CBF\u0C82\u0C97\u0CB3 \u0CB9\u0CBE\u0CB2\u0CBF\u0CA8 \u0CAC\u0CBF\u0CB2\u0CCD:\n` +
-        `\u0C92\u0C9F\u0CCD\u0C9F\u0CC1 \u0CB2\u0CC0\u0C9F\u0CB0\u0CCD: ${litres}\n` +
-        `\u0C92\u0C9F\u0CCD\u0C9F\u0CC1 \u0CAE\u0CCA\u0CA4\u0CCD\u0CA4: \u20B9${amount}\n` +
-        `\u0CB8\u0CCD\u0CB5\u0CC0\u0C95\u0CB0\u0CBF\u0CB8\u0CBF\u0CA6: \u20B9${received}\n` +
-        `\u0CAC\u0CBE\u0C95\u0CBF: \u20B9${pending}\n` +
-        `\u0CA6\u0CAF\u0CB5\u0CBF\u0C9F\u0CCD\u0C9F\u0CC1 \u0CAC\u0CBE\u0C95\u0CBF \u0CAE\u0CCA\u0CA4\u0CCD\u0CA4\u0CB5\u0CA8\u0CCD\u0CA8\u0CC1 \u0CAA\u0CBE\u0CB5\u0CA4\u0CBF\u0CB8\u0CBF.\n` +
-        `\u0C88\u0C97\u0CBE\u0C97\u0CB2\u0CC7 \u0CAA\u0CBE\u0CB5\u0CA4\u0CBF\u0CB8\u0CBF\u0CA6\u0CCD\u0CA6\u0CB0\u0CC6 \u0CA6\u0CAF\u0CB5\u0CBF\u0C9F\u0CCD\u0C9F\u0CC1 \u0CA8\u0CBF\u0CB0\u0CCD\u0CB2\u0C95\u0CCD\u0CB7\u0CBF\u0CB8\u0CBF.\n\n` +
-        `--- \u0939\u093F\u0902\u0926\u0940 ---\n` +
-        `${month} ${year} \u092E\u0939\u0940\u0928\u0947 \u0915\u093E \u0926\u0942\u0927 \u092C\u093F\u0932:\n` +
-        `\u0915\u0941\u0932 \u0932\u0940\u091F\u0930: ${litres}\n` +
-        `\u0915\u0941\u0932 \u0930\u093E\u0936\u093F: \u20B9${amount}\n` +
-        `\u092A\u094D\u0930\u093E\u092A\u094D\u0924: \u20B9${received}\n` +
-        `\u092C\u0915\u093E\u092F\u093E: \u20B9${pending}\n` +
-        `\u0915\u0943\u092A\u092F\u093E \u092C\u0915\u093E\u092F\u093E \u0930\u093E\u0936\u093F \u0915\u093E \u092D\u0941\u0917\u0924\u093E\u0928 \u0915\u0930\u0947\u0902.\n` +
-        `\u0905\u0917\u0930 \u092A\u0939\u0932\u0947 \u0938\u0947 \u092D\u0941\u0917\u0924\u093E\u0928 \u0915\u093F\u092F\u093E \u0939\u0948 \u0924\u094B \u0915\u0943\u092A\u092F\u093E \u0905\u0928\u0926\u0947\u0916\u093E \u0915\u0930\u0947\u0902.\n\n` +
-        `--- Payment / \u0CAA\u0CBE\u0CB5\u0CA4\u0CBF / \u092D\u0941\u0917\u0924\u093E\u0928 ---\n` +
-        `UPI: upi://pay?pa=mohanece19@oksbi&pn=Creamy%20Delight&am=${pending}&cu=INR&tn=Milk%20Bill%20${month}%20${year}\n\n` +
-        `QR Code: ${window.location.origin}/pay/${customerId}?amount=${pending}&month=${month}&year=${year}\n\n` +
-        `- Creamy Delight \uD83E\uDD5B`;
+    let message = `Hi ${name},\n\n`;
+
+    // English
+    message += `*Creamy Delight - Milk Bill*\n`;
+    message += `Month: ${month} ${year}\n\n`;
+    message += `*This Month:*\n`;
+    message += `Total Litres: ${litres}\n`;
+    message += `Bill Amount: \u20B9${amount}\n`;
+    message += `Paid: \u20B9${received}\n`;
+    message += `This Month Pending: \u20B9${thisMonthPending}\n\n`;
+    if (prevPending > 0) {
+        message += `*Previous Balance:* \u20B9${prevPending}\n\n`;
+    }
+    message += `*Total Amount Due: \u20B9${overallPending}*\n\n`;
+    message += `Please clear the pending amount at your convenience.\n`;
+    message += `Please ignore if already paid.\n\n`;
+
+    // Kannada
+    message += `--- \u0C95\u0CA8\u0CCD\u0CA8\u0CA1 ---\n`;
+    message += `*\u0C95\u0CCD\u0CB0\u0CC0\u0CAE\u0CBF \u0CA1\u0CBF\u0CB2\u0CC8\u0C9F\u0CCD - \u0CB9\u0CBE\u0CB2\u0CBF\u0CA8 \u0CAC\u0CBF\u0CB2\u0CCD*\n`;
+    message += `\u0CA4\u0CBF\u0C82\u0C97\u0CB3\u0CC1: ${month} ${year}\n\n`;
+    message += `*\u0C88 \u0CA4\u0CBF\u0C82\u0C97\u0CB3\u0CC1:*\n`;
+    message += `\u0C92\u0C9F\u0CCD\u0C9F\u0CC1 \u0CB2\u0CC0\u0C9F\u0CB0\u0CCD: ${litres}\n`;
+    message += `\u0CAC\u0CBF\u0CB2\u0CCD \u0CAE\u0CCA\u0CA4\u0CCD\u0CA4: \u20B9${amount}\n`;
+    message += `\u0CAA\u0CBE\u0CB5\u0CA4\u0CBF\u0CB8\u0CBF\u0CA6: \u20B9${received}\n`;
+    message += `\u0C88 \u0CA4\u0CBF\u0C82\u0C97\u0CB3 \u0CAC\u0CBE\u0C95\u0CBF: \u20B9${thisMonthPending}\n\n`;
+    if (prevPending > 0) {
+        message += `*\u0CB9\u0CBF\u0C82\u0CA6\u0CBF\u0CA8 \u0CAC\u0CBE\u0C95\u0CBF:* \u20B9${prevPending}\n\n`;
+    }
+    message += `*\u0C92\u0C9F\u0CCD\u0C9F\u0CC1 \u0CAC\u0CBE\u0C95\u0CBF: \u20B9${overallPending}*\n`;
+    message += `\u0CA6\u0CAF\u0CB5\u0CBF\u0C9F\u0CCD\u0C9F\u0CC1 \u0CAC\u0CBE\u0C95\u0CBF \u0CAE\u0CCA\u0CA4\u0CCD\u0CA4\u0CB5\u0CA8\u0CCD\u0CA8\u0CC1 \u0CAA\u0CBE\u0CB5\u0CA4\u0CBF\u0CB8\u0CBF.\n`;
+    message += `\u0C88\u0C97\u0CBE\u0C97\u0CB2\u0CC7 \u0CAA\u0CBE\u0CB5\u0CA4\u0CBF\u0CB8\u0CBF\u0CA6\u0CCD\u0CA6\u0CB0\u0CC6 \u0CA6\u0CAF\u0CB5\u0CBF\u0C9F\u0CCD\u0C9F\u0CC1 \u0CA8\u0CBF\u0CB0\u0CCD\u0CB2\u0C95\u0CCD\u0CB7\u0CBF\u0CB8\u0CBF.\n\n`;
+
+    // Hindi
+    message += `--- \u0939\u093F\u0902\u0926\u0940 ---\n`;
+    message += `*Creamy Delight - \u0926\u0942\u0927 \u092C\u093F\u0932*\n`;
+    message += `\u092E\u0939\u0940\u0928\u093E: ${month} ${year}\n\n`;
+    message += `*\u0907\u0938 \u092E\u0939\u0940\u0928\u0947:*\n`;
+    message += `\u0915\u0941\u0932 \u0932\u0940\u091F\u0930: ${litres}\n`;
+    message += `\u092C\u093F\u0932 \u0930\u093E\u0936\u093F: \u20B9${amount}\n`;
+    message += `\u092D\u0941\u0917\u0924\u093E\u0928: \u20B9${received}\n`;
+    message += `\u0907\u0938 \u092E\u0939\u0940\u0928\u0947 \u092C\u0915\u093E\u092F\u093E: \u20B9${thisMonthPending}\n\n`;
+    if (prevPending > 0) {
+        message += `*\u092A\u093F\u091B\u0932\u093E \u092C\u0915\u093E\u092F\u093E:* \u20B9${prevPending}\n\n`;
+    }
+    message += `*\u0915\u0941\u0932 \u092C\u0915\u093E\u092F\u093E: \u20B9${overallPending}*\n`;
+    message += `\u0915\u0943\u092A\u092F\u093E \u092C\u0915\u093E\u092F\u093E \u0930\u093E\u0936\u093F \u0915\u093E \u092D\u0941\u0917\u0924\u093E\u0928 \u0915\u0930\u0947\u0902.\n`;
+    message += `\u0905\u0917\u0930 \u092A\u0939\u0932\u0947 \u0938\u0947 \u092D\u0941\u0917\u0924\u093E\u0928 \u0915\u093F\u092F\u093E \u0939\u0948 \u0924\u094B \u0915\u0943\u092A\u092F\u093E \u0905\u0928\u0926\u0947\u0916\u093E \u0915\u0930\u0947\u0902.\n\n`;
+
+    // Payment link
+    message += `--- Pay here / \u0CAA\u0CBE\u0CB5\u0CA4\u0CBF / \u092D\u0941\u0917\u0924\u093E\u0928 ---\n`;
+    message += `https://payviaupi.link/pay?pa=mohanece19@oksbi&pn=Creamy+Delight&am=${overallPending}&tn=Milk+Bill+${month}+${year}\n\n`;
+    message += `- Creamy Delight \uD83E\uDD5B`;
 
     const encodedMsg = encodeURIComponent(message);
 
