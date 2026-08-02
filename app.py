@@ -401,6 +401,7 @@ def monthly_report():
     total_litres_all = 0
     total_amount_all = 0
     total_received_all = 0
+    total_prev_pending_all = 0
 
     for c in customers:
         deliveries = Delivery.query.filter(
@@ -419,20 +420,43 @@ def monthly_report():
 
         pending = total_amount - int(total_received)
 
-        if total_litres > 0 or total_received > 0:
+        # Calculate previous months' pending (all-time up to but NOT including this month)
+        all_prev_deliveries = Delivery.query.filter(
+            Delivery.customer_id == c.id,
+            Delivery.date < start,
+            Delivery.quantity_litres > 0
+        ).all()
+        prev_total_litres = round(sum(d.quantity_litres for d in all_prev_deliveries), 2)
+        prev_total_amount = math.ceil(prev_total_litres * c.rate_per_litre)
+
+        all_prev_payments = Payment.query.filter(
+            Payment.customer_id == c.id,
+            ((Payment.year < year) | ((Payment.year == year) & (Payment.month < month)))
+        ).all()
+        prev_total_received = sum(p.amount for p in all_prev_payments)
+        prev_pending = prev_total_amount - int(prev_total_received)
+        if prev_pending < 0:
+            prev_pending = 0
+
+        overall_pending = prev_pending + pending
+
+        if total_litres > 0 or total_received > 0 or prev_pending > 0:
             report.append({
                 'customer_id': c.id,
                 'customer_name': c.name,
                 'rate_per_litre': c.rate_per_litre,
                 'total_litres': total_litres,
                 'total_amount': total_amount,
-                'received_payment': total_received,
-                'pending_payment': pending
+                'received_payment': int(total_received),
+                'pending_payment': pending,
+                'prev_pending': prev_pending,
+                'overall_pending': overall_pending
             })
 
             total_litres_all += total_litres
             total_amount_all += total_amount
             total_received_all += total_received
+            total_prev_pending_all += prev_pending
 
     return jsonify({
         'month': month,
@@ -442,7 +466,9 @@ def monthly_report():
             'total_litres': round(total_litres_all, 2),
             'total_amount': math.ceil(total_amount_all),
             'total_received': int(total_received_all),
-            'total_pending': math.ceil(total_amount_all) - int(total_received_all)
+            'total_pending': math.ceil(total_amount_all) - int(total_received_all),
+            'total_prev_pending': total_prev_pending_all,
+            'total_overall_pending': total_prev_pending_all + math.ceil(total_amount_all) - int(total_received_all)
         }
     })
 
@@ -541,13 +567,13 @@ def export_excel():
     )
 
     # Title
-    ws.merge_cells('A1:G1')
+    ws.merge_cells('A1:I1')
     ws['A1'] = f"Creamy Delight - Monthly Bill Report ({month_names[month-1]} {year})"
     ws['A1'].font = title_font
     ws['A1'].alignment = Alignment(horizontal='center')
 
     # Headers
-    headers = ['#', 'Customer', 'Rate/L', 'Litres', 'Amount (₹)', 'Received (₹)', 'Pending (₹)']
+    headers = ['#', 'Customer', 'Rate/L', 'Litres', 'Amount (₹)', 'Received (₹)', 'This Month (₹)', 'Prev Months (₹)', 'Overall (₹)']
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=3, column=col, value=header)
         cell.font = header_font_white
@@ -561,6 +587,7 @@ def export_excel():
     total_litres_all = 0
     total_amount_all = 0
     total_received_all = 0
+    total_prev_pending_all = 0
 
     for c in customers:
         deliveries = Delivery.query.filter(
@@ -578,7 +605,27 @@ def export_excel():
         total_received = sum(p.amount for p in payments)
         pending = total_amount - int(total_received)
 
-        if total_litres > 0 or total_received > 0:
+        # Previous months pending
+        all_prev_deliveries = Delivery.query.filter(
+            Delivery.customer_id == c.id,
+            Delivery.date < start,
+            Delivery.quantity_litres > 0
+        ).all()
+        prev_total_litres = round(sum(d.quantity_litres for d in all_prev_deliveries), 2)
+        prev_total_amount = math.ceil(prev_total_litres * c.rate_per_litre)
+
+        all_prev_payments = Payment.query.filter(
+            Payment.customer_id == c.id,
+            ((Payment.year < year) | ((Payment.year == year) & (Payment.month < month)))
+        ).all()
+        prev_total_received = sum(p.amount for p in all_prev_payments)
+        prev_pending = prev_total_amount - int(prev_total_received)
+        if prev_pending < 0:
+            prev_pending = 0
+
+        overall_pending = prev_pending + pending
+
+        if total_litres > 0 or total_received > 0 or prev_pending > 0:
             ws.cell(row=row_num, column=1, value=row_num - 3).border = thin_border
             ws.cell(row=row_num, column=2, value=c.name).border = thin_border
             ws.cell(row=row_num, column=3, value=c.rate_per_litre).border = thin_border
@@ -586,11 +633,14 @@ def export_excel():
             ws.cell(row=row_num, column=5, value=total_amount).border = thin_border
             ws.cell(row=row_num, column=6, value=int(total_received)).border = thin_border
             ws.cell(row=row_num, column=7, value=pending).border = thin_border
+            ws.cell(row=row_num, column=8, value=prev_pending).border = thin_border
+            ws.cell(row=row_num, column=9, value=overall_pending).border = thin_border
             row_num += 1
 
             total_litres_all += total_litres
             total_amount_all += total_amount
             total_received_all += total_received
+            total_prev_pending_all += prev_pending
 
     # Summary row
     row_num += 1
@@ -599,6 +649,8 @@ def export_excel():
     ws.cell(row=row_num, column=5, value=math.ceil(total_amount_all)).font = header_font
     ws.cell(row=row_num, column=6, value=int(total_received_all)).font = header_font
     ws.cell(row=row_num, column=7, value=math.ceil(total_amount_all) - int(total_received_all)).font = header_font
+    ws.cell(row=row_num, column=8, value=total_prev_pending_all).font = header_font
+    ws.cell(row=row_num, column=9, value=total_prev_pending_all + math.ceil(total_amount_all) - int(total_received_all)).font = header_font
 
     # Auto-adjust column widths
     for col in ws.columns:

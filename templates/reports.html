@@ -37,28 +37,40 @@
 
 <!-- Summary Cards -->
 <div class="row mb-4" id="summaryCards" style="display:none;">
-    <div class="col-md-3">
+    <div class="col-md-2">
         <div class="card stat-card text-center p-3 bg-light">
             <h6>Total Litres</h6>
             <h4 id="rptTotalLitres" class="text-primary">0</h4>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
         <div class="card stat-card text-center p-3 bg-light">
             <h6>Total Amount</h6>
             <h4 id="rptTotalAmount" class="text-warning">&#8377;0</h4>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
         <div class="card stat-card text-center p-3 bg-light">
             <h6>Received</h6>
             <h4 id="rptReceived" class="text-success">&#8377;0</h4>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2">
         <div class="card stat-card text-center p-3 bg-light">
-            <h6>Pending</h6>
+            <h6>This Month Pending</h6>
             <h4 id="rptPending" class="text-danger">&#8377;0</h4>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card stat-card text-center p-3 bg-light">
+            <h6>Prev Months</h6>
+            <h4 id="rptPrevPending" class="text-warning">&#8377;0</h4>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card stat-card text-center p-3 bg-light">
+            <h6>Overall Pending</h6>
+            <h4 id="rptOverallPending" class="text-danger fw-bold">&#8377;0</h4>
         </div>
     </div>
 </div>
@@ -69,7 +81,7 @@
         <thead>
             <tr>
                 <th>#</th><th>Customer</th><th>Rate/L</th><th>Litres</th>
-                <th>Amount</th><th>Received</th><th>Pending</th><th>Actions</th>
+                <th>Amount</th><th>Received</th><th>This Month</th><th>Prev Months</th><th>Overall</th><th>Actions</th>
             </tr>
         </thead>
         <tbody id="reportTable"></tbody>
@@ -120,6 +132,8 @@ async function loadReport() {
     document.getElementById('rptTotalAmount').textContent = '\u20B9' + reportData.summary.total_amount;
     document.getElementById('rptReceived').textContent = '\u20B9' + reportData.summary.total_received;
     document.getElementById('rptPending').textContent = '\u20B9' + reportData.summary.total_pending;
+    document.getElementById('rptPrevPending').textContent = '\u20B9' + reportData.summary.total_prev_pending;
+    document.getElementById('rptOverallPending').textContent = '\u20B9' + reportData.summary.total_overall_pending;
 
     const tbody = document.getElementById('reportTable');
     tbody.innerHTML = reportData.customers.map((c, i) => `
@@ -131,17 +145,19 @@ async function loadReport() {
             <td>\u20B9${c.total_amount}</td>
             <td class="text-success">\u20B9${c.received_payment}</td>
             <td class="text-danger">\u20B9${c.pending_payment}</td>
+            <td class="text-warning">\u20B9${c.prev_pending}</td>
+            <td class="fw-bold text-danger">\u20B9${c.overall_pending}</td>
             <td>
                 <button class="btn btn-sm btn-outline-primary me-1" title="View Bill"
                     onclick="viewCustomerBill(${c.customer_id})">
                     <i class="bi bi-receipt"></i>
                 </button>
                 <button class="btn btn-sm btn-outline-success me-1" title="Record Payment"
-                    onclick="recordPayment(${c.customer_id}, '${c.customer_name}', ${c.pending_payment}, ${month}, ${year})">
+                    onclick="recordPayment(${c.customer_id}, '${c.customer_name}', ${c.overall_pending}, ${month}, ${year})">
                     <i class="bi bi-cash"></i>
                 </button>
                 <button class="btn btn-sm btn-success" title="Send WhatsApp"
-                    onclick="sendWhatsApp(${c.customer_id}, '${c.customer_name}', ${c.total_litres}, ${c.total_amount}, ${c.received_payment}, ${c.pending_payment})">
+                    onclick="sendWhatsApp(${c.customer_id}, '${c.customer_name}', ${c.total_litres}, ${c.total_amount}, ${c.received_payment}, ${c.overall_pending})">
                     <i class="bi bi-whatsapp"></i>
                 </button>
             </td>
@@ -186,16 +202,18 @@ function exportPDF() {
         c.total_litres,
         c.total_amount,
         c.received_payment,
-        c.pending_payment
+        c.pending_payment,
+        c.prev_pending,
+        c.overall_pending
     ]);
 
     doc.autoTable({
         startY: 35,
-        head: [['#', 'Customer', 'Rate/L', 'Litres', 'Amount', 'Received', 'Pending']],
+        head: [['#', 'Customer', 'Rate/L', 'Litres', 'Amount', 'Received', 'This Month', 'Prev', 'Overall']],
         body: rows,
         theme: 'grid',
         headStyles: { fillColor: [42, 82, 152] },
-        styles: { fontSize: 9 }
+        styles: { fontSize: 8 }
     });
 
     doc.save(`Creamy_Delight_${monthNames[month-1]}_${year}.pdf`);
