@@ -60,20 +60,20 @@
     </div>
     <div class="col-md-2">
         <div class="card stat-card text-center p-3 bg-light">
-            <h6>This Month Pending</h6>
-            <h4 id="rptPending" class="text-danger">&#8377;0</h4>
-        </div>
-    </div>
-    <div class="col-md-2">
-        <div class="card stat-card text-center p-3 bg-light">
-            <h6>Prev Months</h6>
-            <h4 id="rptPrevPending" class="text-warning">&#8377;0</h4>
-        </div>
-    </div>
-    <div class="col-md-2">
-        <div class="card stat-card text-center p-3 bg-light">
             <h6>Overall Pending</h6>
             <h4 id="rptOverallPending" class="text-danger fw-bold">&#8377;0</h4>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card stat-card text-center p-3 bg-light">
+            <h6>This Month Profit</h6>
+            <h4 id="rptMonthProfit" class="text-success">&#8377;0</h4>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="card stat-card text-center p-3 bg-light">
+            <h6>Total Profit</h6>
+            <h4 id="rptTotalProfit" class="text-success fw-bold">&#8377;0</h4>
         </div>
     </div>
 </div>
@@ -135,9 +135,9 @@ async function loadReport() {
     document.getElementById('rptTotalLitres').textContent = reportData.summary.total_litres % 1 === 0 ? reportData.summary.total_litres : reportData.summary.total_litres.toFixed(1);
     document.getElementById('rptTotalAmount').textContent = '\u20B9' + reportData.summary.total_amount;
     document.getElementById('rptReceived').textContent = '\u20B9' + reportData.summary.total_received;
-    document.getElementById('rptPending').textContent = '\u20B9' + reportData.summary.total_pending;
-    document.getElementById('rptPrevPending').textContent = '\u20B9' + reportData.summary.total_prev_pending;
     document.getElementById('rptOverallPending').textContent = '\u20B9' + reportData.summary.total_overall_pending;
+    document.getElementById('rptMonthProfit').textContent = '\u20B9' + reportData.summary.this_month_profit;
+    document.getElementById('rptTotalProfit').textContent = '\u20B9' + reportData.summary.total_profit;
 
     const tbody = document.getElementById('reportTable');
     tbody.innerHTML = reportData.customers.map((c, i) => `

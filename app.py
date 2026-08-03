@@ -468,7 +468,11 @@ def monthly_report():
             'total_received': int(total_received_all),
             'total_pending': math.ceil(total_amount_all) - int(total_received_all),
             'total_prev_pending': total_prev_pending_all,
-            'total_overall_pending': total_prev_pending_all + math.ceil(total_amount_all) - int(total_received_all)
+            'total_overall_pending': total_prev_pending_all + math.ceil(total_amount_all) - int(total_received_all),
+            'this_month_profit': round(total_litres_all * 14, 2),
+            'total_profit': round(
+                sum(d.quantity_litres for d in Delivery.query.filter(Delivery.quantity_litres > 0).all()) * 14, 2
+            )
         }
     })
 
